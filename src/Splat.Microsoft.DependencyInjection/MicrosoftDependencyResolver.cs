@@ -5,6 +5,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Splat.Microsoft.DependencyInjection
@@ -29,7 +30,7 @@ namespace Splat.Microsoft.DependencyInjection
         }
 
         /// <inheritdoc />
-        public object GetService(Type serviceType, string contract = null)
+        public virtual object GetService(Type serviceType, string contract = null)
         {
             _serviceProvider = _serviceDescriptors.BuildServiceProvider();
 
@@ -38,11 +39,11 @@ namespace Splat.Microsoft.DependencyInjection
                 return _serviceProvider.GetService(_namedInstanceFactory[contract].GetType());
             }
 
-            return _serviceProvider.GetService(serviceType);
+            return contract == null ? _serviceProvider.GetService(serviceType) : null;
         }
 
         /// <inheritdoc />
-        public IEnumerable<object> GetServices(Type serviceType, string contract = null)
+        public virtual IEnumerable<object> GetServices(Type serviceType, string contract = null)
         {
             _serviceProvider = _serviceDescriptors.BuildServiceProvider();
 
@@ -55,47 +56,53 @@ namespace Splat.Microsoft.DependencyInjection
         }
 
         /// <inheritdoc />
-        public void Register(Func<object> factory, Type serviceType, string contract = null)
+        public virtual void Register(Func<object> factory, Type serviceType, string contract = null)
         {
             if (contract != null && !_namedInstanceFactory.ContainsKey(contract))
             {
                 _namedInstanceFactory.Add(contract, new ServiceDescriptor(serviceType, factory()));
+                _serviceDescriptors.Add(_namedInstanceFactory[contract]);
+            }
+            else
+            {
                 _serviceDescriptors.AddScoped(serviceType, provider => factory());
             }
-            else
-            {
-                _serviceDescriptors.AddScoped(serviceType, provider => factory);
-            }
         }
 
         /// <inheritdoc />
-        public void UnregisterCurrent(Type serviceType, string contract = null)
+        public virtual void UnregisterCurrent(Type serviceType, string contract = null)
         {
             if (contract != null && _namedInstanceFactory.ContainsKey(contract))
             {
                 _serviceDescriptors.Remove(_namedInstanceFactory[contract]);
+                _namedInstanceFactory.Remove(contract);
             }
             else
             {
-                _serviceDescriptors.Remove(new ServiceDescriptor(serviceType, _serviceProvider.GetService(serviceType)));
+                _serviceDescriptors.RemoveAt(
+                    _serviceDescriptors.IndexOf(_serviceDescriptors.First(x => x.ServiceType == serviceType)));
             }
         }
 
         /// <inheritdoc />
-        public void UnregisterAll(Type serviceType, string contract = null)
+        public virtual void UnregisterAll(Type serviceType, string contract = null)
         {
             if (contract != null && _namedInstanceFactory.ContainsKey(contract))
             {
                 _serviceDescriptors.Remove(_namedInstanceFactory[contract]);
+                _namedInstanceFactory.Remove(contract);
             }
             else
             {
-                _serviceDescriptors.Remove(new ServiceDescriptor(serviceType, _serviceProvider.GetService(serviceType)));
+                foreach (var descriptor in _serviceDescriptors.Where(x => x.ServiceType == serviceType).ToList())
+                {
+                    _serviceDescriptors.RemoveAt(_serviceDescriptors.IndexOf(descriptor));
+                }
             }
         }
 
         /// <inheritdoc />
-        public IDisposable ServiceRegistrationCallback(Type serviceType, string contract, Action<IDisposable> callback)
+        public virtual IDisposable ServiceRegistrationCallback(Type serviceType, string contract, Action<IDisposable> callback)
         {
             throw new NotImplementedException();
         }
